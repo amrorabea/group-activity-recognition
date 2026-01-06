@@ -2,3 +2,4 @@
 /source_data
 /data/volleyball_tracking_annotation
 /data/volleyball-detections
+/training/*.pth

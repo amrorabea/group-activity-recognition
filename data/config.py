@@ -4,7 +4,7 @@ class Config:
     TRACKING_ROOT = "/home/amro/Desktop/group-activity-recognition/data/volleyball_tracking_annotation"
     
     # --- Image Processing ---
-    RESIZE_DIMS = (720, 1280)
+    RESIZE_DIMS = (224, 224)
     
     # ImageNet Normalization
     NORM_MEAN = [0.485, 0.456, 0.406]
@@ -13,6 +13,8 @@ class Config:
     # --- Training Params ---
     BATCH_SIZE = 4
     NUM_WORKERS = 2
+    EPOCHS = 15
+    LR = 1e-4
 
     # --- Dataset Splits ---
     SPLITS = {
