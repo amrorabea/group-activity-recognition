@@ -15,6 +15,7 @@ class Config:
     NUM_WORKERS = 2
     EPOCHS = 15
     LR = 1e-4
+    SAVE = False
 
     # --- Dataset Splits ---
     SPLITS = {

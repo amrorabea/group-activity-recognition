@@ -13,12 +13,15 @@ except ImportError:
 
 class VolleyDataset(Dataset):
     def __init__(self, data_root=Config.DATA_ROOT, tracking_root=Config.TRACKING_ROOT, 
-                split='train', resize_dims=Config.RESIZE_DIMS, transform=None, print_logs=True):
+                split='train', resize_dims=Config.RESIZE_DIMS, crop_size=(224, 224), 
+                return_crops=False, transform=None, print_logs=True):
         
         self.data_root = Path(data_root)
         self.tracking_root = Path(tracking_root)
         self.split = split
         self.resize_dims = resize_dims
+        self.crop_size = crop_size
+        self.return_crops = return_crops
         self.transform = transform
         self.print_logs = print_logs
 
@@ -43,6 +46,8 @@ class VolleyDataset(Dataset):
 
             annot_path = video_dir / 'annotations.txt'
             if not annot_path.exists():
+                if self.print_logs:
+                    print(f"Warning: Annotations path {annot_path} not found")
                 continue
 
             with open(annot_path, 'r') as f:
@@ -101,53 +106,109 @@ class VolleyDataset(Dataset):
     def __getitem__(self, idx):
         s = self.samples[idx]
         
-        target_h, target_w = self.resize_dims
-        frames_list = []
-        
-        # Calculate scale factors once (assuming all frames in clip are same size)
-        # Reading first frame to get dimensions is faster
-        first_img = cv2.imread(str(s["frames"][0]))
-        h_orig, w_orig = first_img.shape[:2]
-        w_scale = target_w / w_orig
-        h_scale = target_h / h_orig
-
-        # 1. Load and Process Images
-        for img_path in s["frames"]:
-            img = cv2.imread(str(img_path))
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            img = cv2.resize(img, (target_w, target_h))
-
-            if self.transform:
-                img = self.transform(img)
-            else:
-                img = transforms.functional.to_tensor(img)
-            frames_list.append(img)
-        
-        frames_tensor = torch.stack(frames_list) # (T, C, H, W)
-
-        # 2. Process Boxes and Labels
+        # 1. Prepare Storage
         T = len(s["valid_frame_ids"])
-        boxes_tensor = torch.zeros((T, 12, 4))
-        actions_tensor = torch.zeros((T, 12), dtype=torch.long)
+        
+        # Determine dims for coordinates rescaling
+        target_h, target_w = self.resize_dims
 
-        for t, frame_id in enumerate(s["valid_frame_ids"]):
-            box_list = sorted(s["frame_boxes_dct"][frame_id], key=lambda b: b.player_ID)
+        # If returning crops, we prepare a 5D tensor: (T, 12, C, H, W)
+        if self.return_crops:
+            crop_h, crop_w = self.crop_size
+            crops_tensor = torch.zeros((T, 12, 3, crop_h, crop_w))
             
-            for i, box_info in enumerate(box_list):
-                if i >= 12: 
-                    break
+            # Boxes still returned, resized to target_dims for spatial context in Stage 2
+            boxes_tensor = torch.zeros((T, 12, 4))
+            actions_tensor = torch.zeros((T, 12), dtype=torch.long)
+
+            for t, img_path in enumerate(s["frames"]):
+                img = cv2.imread(str(img_path))
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 
-                x1, y1, x2, y2 = box_info.box
-                scaled_box = [x1 * w_scale, y1 * h_scale, x2 * w_scale, y2 * h_scale]
+                h_orig, w_orig = img.shape[:2]
+                w_scale = target_w / w_orig
+                h_scale = target_h / h_orig
+
+                frame_id = s["valid_frame_ids"][t]
+                box_list = sorted(s["frame_boxes_dct"][frame_id], key=lambda b: b.player_ID)
                 
-                boxes_tensor[t, i] = torch.tensor(scaled_box)
-                actions_tensor[t, i] = self.person_labels.get(box_info.category, 0)
+                for i, box_info in enumerate(box_list):
+                    if i >= 12: 
+                        break
+                    
+                    x1, y1, x2, y2 = box_info.box
+                    
+                    # 1. Fill Box Tensor (Rescaled for Stage 2 spatial awareness)
+                    scaled_box = [x1 * w_scale, y1 * h_scale, x2 * w_scale, y2 * h_scale]
+                    boxes_tensor[t, i] = torch.tensor(scaled_box)
+                    actions_tensor[t, i] = self.person_labels.get(box_info.category, 0)
+                    
+                    # 2. Extract Crop (From original image)
+                    # Clamp coordinates
+                    x1, y1 = max(0, x1), max(0, y1)
+                    x2, y2 = min(w_orig, x2), min(h_orig, y2)
+                    
+                    if x2 > x1 and y2 > y1:
+                        crop = img[y1:y2, x1:x2]
+                        
+                        # Resize crop to standard size (e.g. 224x224)
+                        crop = cv2.resize(crop, (crop_w, crop_h))
+                        
+                        if self.transform:
+                            crop_t = self.transform(crop)
+                        else:
+                            crop_t = transforms.functional.to_tensor(crop)
+                        
+                        crops_tensor[t, i] = crop_t
+            
+            label = torch.tensor(s["group_label"], dtype=torch.long)
+            # Return: Crops(T,12,3,224,224), Boxes(T,12,4), Actions(T,12), GroupLabel
+            return crops_tensor, boxes_tensor, actions_tensor, label
 
-        label = torch.tensor(s["group_label"], dtype=torch.long)
-        return frames_tensor, boxes_tensor, actions_tensor, label
+        else:
+            # ORIGINAL MODE: Return full frames
+            frames_list = []
+            
+            # Read first frame to get scale (assuming consistent size)
+            first_img = cv2.imread(str(s["frames"][0]))
+            h_orig, w_orig = first_img.shape[:2]
+            w_scale = target_w / w_orig
+            h_scale = target_h / h_orig
+
+            for img_path in s["frames"]:
+                img = cv2.imread(str(img_path))
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                img = cv2.resize(img, (target_w, target_h))
+
+                if self.transform:
+                    img = self.transform(img)
+                else:
+                    img = transforms.functional.to_tensor(img)
+                frames_list.append(img)
+            
+            frames_tensor = torch.stack(frames_list) # (T, C, H, W)
+            
+            boxes_tensor = torch.zeros((T, 12, 4))
+            actions_tensor = torch.zeros((T, 12), dtype=torch.long)
+
+            for t, frame_id in enumerate(s["valid_frame_ids"]):
+                box_list = sorted(s["frame_boxes_dct"][frame_id], key=lambda b: b.player_ID)
+                
+                for i, box_info in enumerate(box_list):
+                    if i >= 12: 
+                        break
+                    
+                    x1, y1, x2, y2 = box_info.box
+                    scaled_box = [x1 * w_scale, y1 * h_scale, x2 * w_scale, y2 * h_scale]
+                    
+                    boxes_tensor[t, i] = torch.tensor(scaled_box)
+                    actions_tensor[t, i] = self.person_labels.get(box_info.category, 0)
+
+            label = torch.tensor(s["group_label"], dtype=torch.long)
+            return frames_tensor, boxes_tensor, actions_tensor, label
 
 
-def get_loader(split='train'):
+def get_loader(split='train', batch_size=Config.BATCH_SIZE, return_crops=False):
     
     transform = transforms.Compose([
         transforms.ToTensor(),
@@ -159,12 +220,13 @@ def get_loader(split='train'):
         tracking_root=Config.TRACKING_ROOT, 
         split=split,
         resize_dims=Config.RESIZE_DIMS,
+        return_crops=return_crops,
         transform=transform
     )
 
     loader = DataLoader(
         dataset,
-        batch_size=Config.BATCH_SIZE,
+        batch_size=batch_size,
         shuffle=(split == 'train'),
         num_workers=Config.NUM_WORKERS
     )
