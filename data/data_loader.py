@@ -4,18 +4,23 @@ import cv2
 from pathlib import Path
 from torchvision import transforms
 
-from helpers import load_tracking_annot
-from config import Config
+try:
+    from data.helpers import load_tracking_annot
+    from data.config import Config
+except ImportError:
+    from helpers import load_tracking_annot
+    from config import Config
 
 class VolleyDataset(Dataset):
     def __init__(self, data_root=Config.DATA_ROOT, tracking_root=Config.TRACKING_ROOT, 
-                 split='train', resize_dims=Config.RESIZE_DIMS, transform=None):
+                split='train', resize_dims=Config.RESIZE_DIMS, transform=None, print_logs=True):
         
         self.data_root = Path(data_root)
         self.tracking_root = Path(tracking_root)
         self.split = split
         self.resize_dims = resize_dims
         self.transform = transform
+        self.print_logs = print_logs
 
         self.splits = Config.SPLITS
         self.person_labels = Config.PERSON_LABELS
@@ -32,7 +37,8 @@ class VolleyDataset(Dataset):
             video_dir = self.data_root / video_id
             
             if not video_dir.exists():
-                print(f"Warning: Video {video_id} found in split definition but missing on disk.")
+                if self.print_logs:
+                    print(f"Warning: Video {video_id} found in split definition but missing on disk.")
                 continue
 
             annot_path = video_dir / 'annotations.txt'
@@ -86,8 +92,8 @@ class VolleyDataset(Dataset):
                         "frame_boxes_dct": frame_boxes_dct,
                         "valid_frame_ids": valid_frame_ids
                     })
-        
-        print(f"Split '{self.split}': Loaded {len(self.samples)} clips from {len(target_video_ids)} videos.")
+        if self.print_logs:
+            print(f"Split '{self.split}': Loaded {len(self.samples)} clips from {len(target_video_ids)} videos.")
 
     def __len__(self):
         return len(self.samples)
