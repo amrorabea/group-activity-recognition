@@ -1,6 +1,10 @@
 import cv2
 import os
 
+from sklearn.metrics import confusion_matrix, classification_report, f1_score
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 class BoxInfo:
     def __init__(self, line):
         words = line.split()
@@ -62,3 +66,38 @@ def vis_clip(annot_path, video_dir):
         if cv2.waitKey(180) & 0xFF == ord('q'):
             break
     cv2.destroyAllWindows()
+
+
+def compute_metrics(y_true, y_pred, class_names):
+    cm = confusion_matrix(y_true, y_pred)
+    
+    # Per-class accuracy
+    per_class_acc = cm.diagonal() / cm.sum(axis=1)
+    mean_class_acc = per_class_acc.mean() * 100
+    
+    print("\n" + "="*60)
+    print("EVALUATION METRICS")
+    print("="*60)
+    
+    print(f"\nMean Per-Class Accuracy (MCA): {mean_class_acc:.2f}%")
+    print("\nPer-Class Accuracy:")
+    for i, (name, acc) in enumerate(zip(class_names, per_class_acc)):
+        print(f"  {name:15s}: {acc*100:.2f}%")
+    
+    print("\n" + classification_report(y_true, y_pred, target_names=class_names, digits=4))
+    
+    return cm, mean_class_acc
+
+
+def plot_confusion_matrix(cm, class_names, save_path='b1_confusion_matrix.png'):
+    """Plot and save confusion matrix"""
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=class_names, yticklabels=class_names)
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.title('B1: Confusion Matrix (Group Activity Recognition)')
+    plt.tight_layout()
+    plt.savefig(save_path)
+    print(f"\nConfusion matrix saved to: {save_path}")
+    plt.close()
