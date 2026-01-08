@@ -1,6 +1,7 @@
 class Config:
     # --- Paths ---
     DATA_ROOT = "/home/amro/Desktop/group-activity-recognition/data/videos"
+    PKL_PATH = "/home/amro/Desktop/group-activity-recognition/data/annot_all.pkl"
     # TRACKING_ROOT = "/home/amro/Desktop/group-activity-recognition/data/volleyball_tracking_annotation"
     
     # --- Image Processing ---

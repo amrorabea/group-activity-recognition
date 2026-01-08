@@ -7,13 +7,14 @@ from torchvision import transforms
 from typing import Tuple
 import numpy as np
 import albumentations as A
-from BaseDataset import BaseDataset
 
 try:
+    from data.BaseDataset import BaseDataset
     from data.config import Config
     sys.path.insert(0, str(Path(__file__).parent / "ref_scripts"))
     from boxinfo import BoxInfo
 except ImportError:
+    from BaseDataset import BaseDataset
     from config import Config
     sys.path.insert(0, str(Path(__file__).parent / "ref_scripts"))
     from boxinfo import BoxInfo
