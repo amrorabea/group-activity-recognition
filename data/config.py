@@ -1,7 +1,7 @@
 class Config:
     # --- Paths ---
     DATA_ROOT = "/home/amro/Desktop/group-activity-recognition/data/videos"
-    TRACKING_ROOT = "/home/amro/Desktop/group-activity-recognition/data/volleyball_tracking_annotation"
+    # TRACKING_ROOT = "/home/amro/Desktop/group-activity-recognition/data/volleyball_tracking_annotation"
     
     # --- Image Processing ---
     RESIZE_DIMS = (224, 224)
@@ -11,11 +11,20 @@ class Config:
     NORM_STD = [0.229, 0.224, 0.225]
 
     # --- Training Params ---
-    BATCH_SIZE = 4
-    NUM_WORKERS = 2
-    EPOCHS = 15
-    LR = 1e-4
-    SAVE = False
+    BATCH_SIZE = 32
+    NUM_WORKERS = 4
+    EPOCHS = 20
+    LR = 3e-4
+    WEIGHT_DECAY = 1e-4
+    DROPOUT = 0.5
+    SAVE = True
+
+    # Scheduler settings
+    SCHEDULER = 'cosine'  # 'cosine', 'plateau', or 'onecycle'
+    T_MAX = 20
+    
+    PATIENCE = 7
+    MIN_DELTA = 0.005
 
     # --- Dataset Splits ---
     SPLITS = {

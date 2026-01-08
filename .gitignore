@@ -2,9 +2,12 @@
 /data/volleyball_tracking_annotation/
 /data/volleyball-detections/
 /source_data/
+*.pkl
 *.pth
 *.pt
 *.ckpt
+*.npy
+*.png
 /training/logs/
 /training/runs/
 /training/checkpoints/
